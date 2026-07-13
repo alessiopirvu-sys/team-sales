@@ -150,6 +150,7 @@ async function fetchTeamData(team) {
     .select('*')
     .eq('team_id', team.id)
     .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -184,7 +185,11 @@ async function fetchTeamData(team) {
 export async function loadTeamsData(teamCount = 4) {
   invariantSupabase()
 
-  const { data: teams, error } = await supabase.from('teams').select('*').order('created_at')
+  const { data: teams, error } = await supabase
+    .from('teams')
+    .select('*')
+    .order('created_at', { ascending: true })
+    .order('id', { ascending: true })
 
   if (error) {
     throw error
