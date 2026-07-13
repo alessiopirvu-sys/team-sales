@@ -145,6 +145,10 @@ function getPageFromHash(hash) {
   return NAV_ITEMS.some((item) => item.id === normalized) ? normalized : 'dashboard'
 }
 
+function getCurrentPathname() {
+  return window.location.pathname || '/'
+}
+
 function createInitialTeams() {
   return Array.from({ length: TEAM_COUNT }, (_, index) =>
     createSampleWorkbookData(`Squadra ${index + 1}`),
@@ -191,6 +195,72 @@ function LoadingPage({ message }) {
           <span className="eyebrow">Team sales</span>
           <h1>Sto caricando i dati</h1>
           <p>{message}</p>
+        </div>
+      </section>
+    </main>
+  )
+}
+
+function AdminPage({ teams }) {
+  const teamSnapshots = teams.map((teamData, index) => {
+    const dashboard = deriveDashboardData(teamData)
+    return {
+      id: index,
+      teamName: dashboard.setup.teamName,
+      monthLabel: dashboard.setup.monthLabel,
+      summary: dashboard.summary,
+      topSeller: dashboard.salesBySeller[0],
+    }
+  })
+
+  return (
+    <main className="admin-page">
+      <section className="admin-shell">
+        <div className="home-header">
+          <span className="eyebrow">Team sales</span>
+          <h1>Supervisione generale</h1>
+          <p>Vista riservata su `/admin` per controllare al volo tutte e quattro le squadre.</p>
+        </div>
+
+        <div className="admin-grid">
+          {teamSnapshots.map((team) => (
+            <article key={team.id} className="admin-card">
+              <div className="admin-card-head">
+                <div>
+                  <span className="eyebrow">{team.monthLabel}</span>
+                  <h3>{team.teamName}</h3>
+                </div>
+                <span className="admin-progress">{formatPercent(team.summary.progress)}</span>
+              </div>
+
+              <div className="admin-metrics">
+                <div>
+                  <span>Venduto</span>
+                  <strong>{formatCurrency(team.summary.soldTotal)}</strong>
+                </div>
+                <div>
+                  <span>Target</span>
+                  <strong>{formatCurrency(team.summary.targetTotal)}</strong>
+                </div>
+                <div>
+                  <span>Manca</span>
+                  <strong>{formatCurrency(team.summary.missingToTarget)}</strong>
+                </div>
+                <div>
+                  <span>Pending</span>
+                  <strong>{formatCurrency(team.summary.pendingValue)}</strong>
+                </div>
+                <div>
+                  <span>Contratti</span>
+                  <strong>{team.summary.pendingCount}</strong>
+                </div>
+                <div>
+                  <span>Top seller</span>
+                  <strong>{team.topSeller?.name || '-'}</strong>
+                </div>
+              </div>
+            </article>
+          ))}
         </div>
       </section>
     </main>
@@ -878,6 +948,7 @@ function App() {
   const [teamsData, setTeamsData] = useState(() => createInitialTeams())
   const [selectedTeamIndex, setSelectedTeamIndex] = useState(null)
   const [isLoadingRemote, setIsLoadingRemote] = useState(true)
+  const [pathname, setPathname] = useState(() => getCurrentPathname())
   const [isEditingSetup, setIsEditingSetup] = useState(false)
   const [isEditingSellers, setIsEditingSellers] = useState(false)
   const [setupDraft, setSetupDraft] = useState(() => ({
@@ -1046,6 +1117,15 @@ function App() {
 
     window.addEventListener('hashchange', syncPageFromHash)
     return () => window.removeEventListener('hashchange', syncPageFromHash)
+  }, [])
+
+  useEffect(() => {
+    const syncPathname = () => {
+      setPathname(getCurrentPathname())
+    }
+
+    window.addEventListener('popstate', syncPathname)
+    return () => window.removeEventListener('popstate', syncPathname)
   }, [])
 
   useEffect(() => {
@@ -1508,6 +1588,7 @@ function App() {
 
   const { setup, teamRows, pendingRows, inserts, summary, cards, salesBySeller } = dashboardData
   const statusTone = getStatusTone(summary)
+  const isAdminRoute = pathname === '/admin'
 
   const pageMeta = useMemo(() => {
     switch (currentPage) {
@@ -1544,6 +1625,10 @@ function App() {
 
   if (isLoadingRemote) {
     return <LoadingPage message="Sto sincronizzando squadre, setup, vendite e pending da Supabase." />
+  }
+
+  if (isAdminRoute) {
+    return <AdminPage teams={teamsData} />
   }
 
   if (selectedTeamIndex == null) {
