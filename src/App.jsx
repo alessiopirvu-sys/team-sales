@@ -915,16 +915,17 @@ function App() {
       return
     }
 
-    let nextTeamData = null
-    setTeamsData((current) =>
-      current.map((teamData, index) => {
-        if (index !== selectedTeamIndex) {
-          return teamData
-        }
+    const currentTeamData = teamsData[selectedTeamIndex]
+    if (!currentTeamData) {
+      return
+    }
 
-        nextTeamData = updater(teamData)
-        return nextTeamData
-      }),
+    const nextTeamData = updater(currentTeamData)
+
+    setTeamsData((current) =>
+      current.map((teamData, index) =>
+        index === selectedTeamIndex ? nextTeamData : teamData,
+      ),
     )
 
     await persistCurrentTeam(nextTeamData, successMessage)
