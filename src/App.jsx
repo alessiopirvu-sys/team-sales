@@ -542,9 +542,14 @@ function InserimentiPage({
   summary,
   salesBySeller,
   saleForm,
+  saleEditForm,
   onSaleFormChange,
   onSaleSubmit,
   onToggleSaleForm,
+  onOpenSaleEdit,
+  onSaleEditFormChange,
+  onSaleEditSubmit,
+  onCloseSaleEdit,
 }) {
   return (
     <section className="panel-stack">
@@ -594,6 +599,7 @@ function InserimentiPage({
                   ))}
                   <th>Totale</th>
                   <th>Cumulato</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -607,6 +613,17 @@ function InserimentiPage({
                     ))}
                     <td>{formatCurrency(row.dayTotal)}</td>
                     <td>{formatCurrency(row.cumulative)}</td>
+                    <td className="actions-cell">
+                      {row.date ? (
+                        <button
+                          type="button"
+                          className="icon-button"
+                          onClick={() => onOpenSaleEdit(row.day - 1)}
+                        >
+                          Modifica
+                        </button>
+                      ) : null}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -654,6 +671,41 @@ function InserimentiPage({
           </div>
         </form>
       </Modal>
+
+      <Modal title="Modifica vendita" isOpen={saleEditForm.isOpen} onClose={onCloseSaleEdit}>
+        <form className="modal-form" onSubmit={onSaleEditSubmit}>
+          <label className="field-card">
+            <span>Data</span>
+            <input
+              type="date"
+              value={saleEditForm.date}
+              onChange={(event) => onSaleEditFormChange('date', event.target.value)}
+            />
+          </label>
+          {salesBySeller.map((seller) => (
+            <label key={seller.name} className="field-card">
+              <span>{seller.name}</span>
+              <input
+                type="number"
+                min="0"
+                step="1"
+                value={saleEditForm.salesBySeller[seller.name] ?? ''}
+                onChange={(event) =>
+                  onSaleEditFormChange('salesBySeller', {
+                    sellerName: seller.name,
+                    value: event.target.value,
+                  })
+                }
+              />
+            </label>
+          ))}
+          <div className="modal-actions">
+            <button type="submit" className="button-primary">
+              Salva modifica
+            </button>
+          </div>
+        </form>
+      </Modal>
     </section>
   )
 }
@@ -663,10 +715,12 @@ function PendingPage({
   summary,
   sellerOptions,
   pendingForm,
+  isEditingPending,
   onPendingFormChange,
   onPendingSubmit,
   onTogglePendingForm,
   onRemovePending,
+  onOpenPendingEdit,
 }) {
   return (
     <section className="panel-stack">
@@ -729,6 +783,13 @@ function PendingPage({
                     <button
                       type="button"
                       className="icon-button"
+                      onClick={() => onOpenPendingEdit(index)}
+                    >
+                      Modifica
+                    </button>
+                    <button
+                      type="button"
+                      className="icon-button"
                       onClick={() => onRemovePending(index)}
                     >
                       Elimina
@@ -773,6 +834,24 @@ function PendingPage({
             />
           </label>
           <label className="field-card">
+            <span>Valore</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={pendingForm.value}
+              onChange={(event) => onPendingFormChange('value', event.target.value)}
+            />
+          </label>
+          <label className="field-card">
+            <span>Chiusura</span>
+            <input
+              type="date"
+              value={pendingForm.closeDate}
+              onChange={(event) => onPendingFormChange('closeDate', event.target.value)}
+            />
+          </label>
+          <label className="field-card">
             <span>Note</span>
             <input
               type="text"
@@ -782,7 +861,7 @@ function PendingPage({
           </label>
           <div className="modal-actions">
             <button type="submit" className="button-primary">
-              Salva pending
+              {isEditingPending ? 'Salva modifica' : 'Salva pending'}
             </button>
           </div>
         </form>
@@ -817,11 +896,20 @@ function App() {
     date: formatDateForInput(workbookData.inserts.find((row) => row.date)?.date) || '2026-07-01',
     amount: '',
   })
+  const [saleEditForm, setSaleEditForm] = useState({
+    isOpen: false,
+    rowIndex: null,
+    date: '',
+    salesBySeller: {},
+  })
   const [pendingForm, setPendingForm] = useState({
     isOpen: false,
+    rowIndex: null,
     client: '',
     seller: workbookData.setup.sellers[0]?.name || '',
+    value: '',
     phase: '',
+    closeDate: '',
     notes: '',
   })
   const dashboardData = useMemo(() => deriveDashboardData(workbookData), [workbookData])
@@ -975,7 +1063,7 @@ function App() {
   }, [pendingForm.seller, workbookData.setup.sellers])
 
   useEffect(() => {
-    if (!saleForm.isOpen && !pendingForm.isOpen) {
+    if (!saleForm.isOpen && !saleEditForm.isOpen && !pendingForm.isOpen) {
       return undefined
     }
 
@@ -983,6 +1071,9 @@ function App() {
       if (event.key === 'Escape') {
         if (saleForm.isOpen) {
           setSaleForm((current) => ({ ...current, isOpen: false }))
+        }
+        if (saleEditForm.isOpen) {
+          setSaleEditForm((current) => ({ ...current, isOpen: false }))
         }
         if (pendingForm.isOpen) {
           setPendingForm((current) => ({ ...current, isOpen: false }))
@@ -992,7 +1083,7 @@ function App() {
 
     window.addEventListener('keydown', handleEscape)
     return () => window.removeEventListener('keydown', handleEscape)
-  }, [pendingForm.isOpen, saleForm.isOpen])
+  }, [pendingForm.isOpen, saleEditForm.isOpen, saleForm.isOpen])
 
   const handleNavigate = (pageId) => {
     window.location.hash = pageId
@@ -1010,11 +1101,20 @@ function App() {
       date: formatDateForInput(nextTeam.inserts.find((row) => row.date)?.date) || '2026-07-01',
       amount: '',
     })
+    setSaleEditForm({
+      isOpen: false,
+      rowIndex: null,
+      date: '',
+      salesBySeller: {},
+    })
     setPendingForm({
       isOpen: false,
+      rowIndex: null,
       client: '',
       seller: nextTeam.setup.sellers[0]?.name || '',
+      value: '',
       phase: '',
+      closeDate: '',
       notes: '',
     })
   }
@@ -1024,6 +1124,7 @@ function App() {
     setIsEditingSetup(false)
     setIsEditingSellers(false)
     setSaleForm((current) => ({ ...current, isOpen: false }))
+    setSaleEditForm((current) => ({ ...current, isOpen: false }))
     setPendingForm((current) => ({ ...current, isOpen: false }))
   }
 
@@ -1171,10 +1272,109 @@ function App() {
 
   const handleTogglePendingForm = () => {
     setPendingForm((current) => ({
-      ...current,
       isOpen: !current.isOpen,
-      seller: current.seller || workbookData.setup.sellers[0]?.name || '',
+      rowIndex: null,
+      client: '',
+      seller: workbookData.setup.sellers[0]?.name || current.seller || '',
+      value: '',
+      phase: '',
+      closeDate: '',
+      notes: '',
     }))
+  }
+
+  const handleOpenSaleEdit = (rowIndex) => {
+    const row = workbookData.inserts[rowIndex]
+    if (!row) {
+      return
+    }
+
+    setSaleEditForm({
+      isOpen: true,
+      rowIndex,
+      date: formatDateForInput(row.date),
+      salesBySeller: Object.fromEntries(
+        workbookData.setup.sellers.map((seller) => [
+          seller.name,
+          String(row.salesBySeller[seller.name] || 0),
+        ]),
+      ),
+    })
+  }
+
+  const handleSaleEditFormChange = (field, value) => {
+    if (field === 'salesBySeller') {
+      setSaleEditForm((current) => ({
+        ...current,
+        salesBySeller: {
+          ...current.salesBySeller,
+          [value.sellerName]: value.value,
+        },
+      }))
+      return
+    }
+
+    setSaleEditForm((current) => ({ ...current, [field]: value }))
+  }
+
+  const handleCloseSaleEdit = () => {
+    setSaleEditForm({
+      isOpen: false,
+      rowIndex: null,
+      date: '',
+      salesBySeller: {},
+    })
+  }
+
+  const handleSaleEditSubmit = async (event) => {
+    event.preventDefault()
+
+    if (saleEditForm.rowIndex == null) {
+      return
+    }
+
+    const formattedDate = formatDateFromInput(saleEditForm.date)
+    const normalizedSales = Object.fromEntries(
+      workbookData.setup.sellers.map((seller) => [
+        seller.name,
+        Math.max(0, Number.parseInt(saleEditForm.salesBySeller[seller.name], 10) || 0),
+      ]),
+    )
+    const total = Object.values(normalizedSales).reduce((sum, value) => sum + value, 0)
+
+    await applyCurrentTeamUpdate((current) => ({
+      ...current,
+      inserts: current.inserts.map((row, index) =>
+        index === saleEditForm.rowIndex
+          ? {
+              ...row,
+              date: total > 0 ? formattedDate : '',
+              isCompleted: total > 0 && Boolean(formattedDate),
+              salesBySeller: normalizedSales,
+            }
+          : row,
+      ),
+    }), 'Vendita modificata.')
+
+    handleCloseSaleEdit()
+  }
+
+  const handleOpenPendingEdit = (rowIndex) => {
+    const row = workbookData.pendingRows[rowIndex]
+    if (!row) {
+      return
+    }
+
+    setPendingForm({
+      isOpen: true,
+      rowIndex,
+      client: row.client,
+      seller: row.seller,
+      value: String(row.value || ''),
+      phase: row.phase,
+      closeDate: formatDateForInput(row.closeDate),
+      notes: row.notes,
+    })
   }
 
   const handlePendingSubmit = async (event) => {
@@ -1182,37 +1382,49 @@ function App() {
 
     const client = pendingForm.client.trim()
     const seller = pendingForm.seller.trim()
+    const value = Math.max(0, Number.parseInt(pendingForm.value, 10) || 0)
     const phase = pendingForm.phase.trim()
+    const closeDate = formatDateFromInput(pendingForm.closeDate)
     const notes = pendingForm.notes.trim()
 
-    if (!client || !seller || !phase || !notes) {
+    if (!client || !seller || !phase || !notes || value <= 0) {
       setFeedback({
         type: 'error',
-        message: 'Per inserire un nuovo pending servono cliente, venditore, fase e note.',
+        message: 'Per inserire un pending servono cliente, venditore, fase, valore e note.',
       })
       return
     }
 
-    await applyCurrentTeamUpdate((current) => ({
-      ...current,
-      pendingRows: [
-        ...current.pendingRows,
-        {
-          client,
-          seller,
-          value: 0,
-          phase,
-          closeDate: '',
-          notes,
-        },
-      ],
-    }), `Pending salvato: ${client} assegnato a ${seller}.`)
+    await applyCurrentTeamUpdate((current) => {
+      const nextRow = {
+        ...(pendingForm.rowIndex != null ? current.pendingRows[pendingForm.rowIndex] : {}),
+        client,
+        seller,
+        value,
+        phase,
+        closeDate,
+        notes,
+      }
+
+      return {
+        ...current,
+        pendingRows:
+          pendingForm.rowIndex == null
+            ? [...current.pendingRows, nextRow]
+            : current.pendingRows.map((row, index) =>
+                index === pendingForm.rowIndex ? nextRow : row,
+              ),
+      }
+    }, pendingForm.rowIndex == null ? `Pending salvato: ${client} assegnato a ${seller}.` : `Pending modificato: ${client}.`)
 
     setPendingForm({
       isOpen: false,
+      rowIndex: null,
       client: '',
       seller: workbookData.setup.sellers[0]?.name || '',
+      value: '',
       phase: '',
+      closeDate: '',
       notes: '',
     })
   }
@@ -1431,9 +1643,14 @@ function App() {
             summary={summary}
             salesBySeller={salesBySeller}
             saleForm={saleForm}
+            saleEditForm={saleEditForm}
             onSaleFormChange={handleSaleFormChange}
             onSaleSubmit={handleSaleSubmit}
             onToggleSaleForm={handleToggleSaleForm}
+            onOpenSaleEdit={handleOpenSaleEdit}
+            onSaleEditFormChange={handleSaleEditFormChange}
+            onSaleEditSubmit={handleSaleEditSubmit}
+            onCloseSaleEdit={handleCloseSaleEdit}
           />
         )}
 
@@ -1443,10 +1660,12 @@ function App() {
             summary={summary}
             sellerOptions={salesBySeller.map((seller) => seller.name)}
             pendingForm={pendingForm}
+            isEditingPending={pendingForm.rowIndex != null}
             onPendingFormChange={handlePendingFormChange}
             onPendingSubmit={handlePendingSubmit}
             onTogglePendingForm={handleTogglePendingForm}
             onRemovePending={handleRemovePending}
+            onOpenPendingEdit={handleOpenPendingEdit}
           />
         )}
       </main>
