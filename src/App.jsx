@@ -802,7 +802,11 @@ function PendingPage({
         </div>
       </article>
 
-      <Modal title="Nuovo pending" isOpen={pendingForm.isOpen} onClose={onTogglePendingForm}>
+      <Modal
+        title={isEditingPending ? 'Modifica pending' : 'Nuovo pending'}
+        isOpen={pendingForm.isOpen}
+        onClose={onTogglePendingForm}
+      >
         <form className="modal-form" onSubmit={onPendingSubmit}>
           <label className="field-card">
             <span>Cliente</span>
